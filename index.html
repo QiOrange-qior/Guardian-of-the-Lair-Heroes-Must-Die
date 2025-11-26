@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>巢穴的守护者：英雄必须死</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Serif SC', serif;
+            background-color: #0f0505; /* dark red-black */
+            color: #d6d3d1;
+        }
+        
+        .parchment {
+            background-color: #1a0505; /* deep dark red */
+            border: 1px solid #450a0a; /* dark red border */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.95);
+        }
+
+        .parchment-inset {
+            background-color: #0f0202;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.9);
+        }
+
+        .btn-action {
+            background: linear-gradient(to bottom, #450a0a, #2a0404);
+            border: 1px solid #7f1d1d;
+            color: #fecaca;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            text-align: center;
+            cursor: pointer;
+            text-shadow: 0 1px 2px black;
+        }
+
+        .btn-action:hover {
+            background: linear-gradient(to bottom, #7f1d1d, #450a0a);
+            border-color: #f87171;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #2a0404;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .text-highlight { color: #f87171; } /* red-400 */
+        .text-magic { color: #c084fc; } /* purple-400 */
+        .text-gold { color: #fcd34d; } /* amber-300 */
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0f0505; }
+        ::-webkit-scrollbar-thumb { background: #450a0a; }
+
+        .scene-pan {
+            animation: panImage 40s infinite alternate linear;
+        }
+        @keyframes panImage {
+            from { transform: scale(1.0); }
+            to { transform: scale(1.15); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-2 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]">
+
+    <!-- Header -->
+    <header class="w-full max-w-5xl mb-2 flex justify-between items-end border-b border-red-900/30 pb-2">
+        <div>
+            <h1 class="text-2xl font-bold text-red-100 tracking-wider" style="text-shadow: 0 0 10px #7f1d1d;">巢穴的守护者：英雄必须死</h1>
+            <p class="text-xs text-red-400 italic">Dungeon Guardian: Heroes Must Die</p>
+        </div>
+        <div class="text-right text-xs text-red-500 font-mono">
+            <span id="wave-display">WAVE 0/10</span> | <span id="gold-display" class="text-gold">0 GOLD</span>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <div class="w-full max-w-5xl flex flex-col gap-3">
+        
+        <!-- Top: Scene Display -->
+        <div class="parchment p-1 w-full h-[50vh] min-h-[300px] max-h-[500px] rounded overflow-hidden relative group">
+            <div id="loading-overlay" class="absolute inset-0 bg-black bg-opacity-90 flex items-center justify-center z-20 hidden backdrop-blur-sm">
+                <div class="text-center">
+                    <div class="text-red-500 text-sm mb-2 font-bold tracking-widest">正在构筑幻象...</div>
+                    <div class="w-24 h-0.5 bg-red-900 mx-auto"><div class="h-full bg-red-500 animate-pulse"></div></div>
+                </div>
+            </div>
+            
+            <img id="scene-image" src="https://image.pollinations.ai/prompt/massive%20dragon%20eye%20close%20up%20opening%20in%20darkness%20fiery%20reflection%20cinematic%20fantasy%20horror?width=1280&height=720&nologo=true" 
+                 alt="Scene" class="w-full h-full object-cover scene-pan opacity-90">
+            
+            <!-- Dynamic Status Overlay on Image -->
+            <div class="absolute bottom-4 left-4 z-10 bg-black/60 p-2 rounded border border-red-900/50 backdrop-blur-sm">
+                <div class="text-xs text-red-300 uppercase tracking-widest mb-1">Dungeon Status</div>
+                <div class="flex gap-4 text-xs font-mono">
+                    <div class="text-stone-300">🛡️ 陷阱等级: <span id="trap-lvl" class="text-white">1</span></div>
+                    <div class="text-stone-300">👿 仆从数量: <span id="minion-count" class="text-white">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom: Info & Controls Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 h-[280px]">
+            
+            <!-- Bottom Left: Boss Stats (3 cols) -->
+            <div class="md:col-span-3 parchment p-3 rounded flex flex-col justify-between relative overflow-hidden">
+                <!-- Dragon Background watermark -->
+                <div class="absolute -right-4 -bottom-4 text-9xl opacity-5 pointer-events-none text-red-500 select-none">🐲</div>
+                
+                <div>
+                    <h3 class="text-sm font-bold text-red-400 border-b border-red-900/50 pb-1 mb-2 uppercase tracking-widest">BOSS 状态</h3>
+                    <div class="space-y-1 text-xs text-stone-400">
+                        <div class="flex justify-between"><span class="text-red-900/70 font-bold">NAME</span> <span class="text-red-200">远古红龙·瓦尔哈拉</span></div>
+                        <div class="flex justify-between"><span class="text-red-900/70 font-bold">TYPE</span> <span class="text-red-200">灾厄级生物</span></div>
+                        
+                        <div class="mt-4">
+                            <div class="flex justify-between mb-1 text-[10px] uppercase text-red-500 font-bold"><span>Boss HP</span> <span id="hp-text">1000/1000</span></div>
+                            <div class="w-full bg-stone-900 h-2 rounded overflow-hidden border border-red-900/30">
+                                <div id="hp-bar" class="bg-gradient-to-r from-red-900 to-red-600 h-full transition-all duration-500" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-2 text-center bg-red-950/30 p-2 rounded border border-red-900/20">
+                    <div class="text-[10px] text-red-500 uppercase tracking-widest">Dragon Power</div>
+                    <div id="boss-power" class="font-bold text-red-100 text-xl font-mono" style="text-shadow: 0 0 5px red;">100</div>
+                </div>
+            </div>
+
+            <!-- Bottom Right: Log & Actions (9 cols) -->
+            <div class="md:col-span-9 parchment p-0 rounded flex flex-col overflow-hidden relative">
+                <!-- Log Area -->
+                <div id="game-log" class="flex-1 overflow-y-auto p-3 font-medium text-stone-300 text-xs leading-relaxed parchment-inset m-1 rounded mb-0 font-mono">
+                    <div class="log-entry text-red-400 italic">
+                        公会调度员：喂，那边的大家伙，醒醒！你的起床气最好大一点，因为第一批送死的“英雄”已经在路上了...
+                    </div>
+                </div>
+
+                <!-- Action Area -->
+                <div id="action-area" class="p-2 border-t border-red-900/30 bg-[#1a0505]">
+                    <div id="controls" class="grid grid-cols-3 gap-2">
+                        <button onclick="game.start()" class="btn-action col-span-3 font-bold tracking-widest text-red-100 text-lg">苏醒 (开始游戏)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const game = {
+            state: {
+                wave: 0,
+                maxWaves: 10,
+                gold: 500, // Initial gold
+                boss: {
+                    maxHp: 2000,
+                    hp: 2000,
+                    power: 150
+                },
+                lair: {
+                    trapLevel: 1,
+                    trapPower: 50,
+                    minions: 0,
+                    minionPower: 0 // Total minion power
+                },
+                heroes: null // Current wave heroes
+            },
+
+            utils: {
+                log: (text, type = 'normal') => {
+                    const logEl = document.getElementById('game-log');
+                    const div = document.createElement('div');
+                    div.className = 'log-entry';
+                    if (type === 'dispatcher') div.className += ' text-red-400 italic';
+                    if (type === 'combat') div.className += ' text-stone-100';
+                    if (type === 'gain') div.className += ' text-gold';
+                    if (type === 'danger') div.className += ' text-highlight font-bold';
+                    
+                    div.innerHTML = text;
+                    logEl.appendChild(div);
+                    logEl.scrollTop = logEl.scrollHeight;
+                },
+                
+                updateUI: () => {
+                    const s = game.state;
+                    document.getElementById('wave-display').innerText = `WAVE ${s.wave}/${s.maxWaves}`;
+                    document.getElementById('gold-display').innerText = `${s.gold} GOLD`;
+                    document.getElementById('trap-lvl').innerText = `LV ${s.lair.trapLevel}`;
+                    document.getElementById('minion-count').innerText = s.lair.minions;
+                    
+                    document.getElementById('hp-text').innerText = `${s.boss.hp}/${s.boss.maxHp}`;
+                    const hpPct = (s.boss.hp / s.boss.maxHp) * 100;
+                    document.getElementById('hp-bar').style.width = `${Math.max(0, hpPct)}%`;
+                    document.getElementById('boss-power').innerText = s.boss.power;
+                },
+
+                setImage: (prompt) => {
+                    const overlay = document.getElementById('loading-overlay');
+                    const img = document.getElementById('scene-image');
+                    overlay.classList.remove('hidden');
+                    
+                    const seed = Math.floor(Math.random() * 9999);
+                    const finalPrompt = encodeURIComponent(`dark fantasy rpg art, ${prompt}, dragon perspective, epic scale, volumetric lighting, 8k resolution, cinematic --seed ${seed}`);
+                    const url = `https://image.pollinations.ai/prompt/${finalPrompt}?width=1280&height=720&nologo=true`;
+                    
+                    const temp = new Image();
+                    temp.onload = () => { img.src = url; overlay.classList.add('hidden'); };
+                    temp.src = url;
+                }
+            },
+
+            start: () => {
+                game.state.wave = 1;
+                game.utils.log("【公会调度员】：好戏开场了！这是第一批敢死队。你有 500 金币的预算，别让我失望，把你的窝装修得“凶险”一点！", 'dispatcher');
+                game.constructionPhase();
+            },
+
+            constructionPhase: () => {
+                game.utils.updateUI();
+                game.utils.setImage("inside a massive dragon lair cave treasure pile dark shadows glowing lava veins first person view of dragon claws");
+                
+                const s = game.state;
+                const costTrap = s.lair.trapLevel * 200;
+                const costMinion = 150;
+                const costHeal = 300;
+
+                game.utils.log(`== 建设阶段 (Wave ${s.wave}) ==`, 'highlight');
+                game.utils.log(`当前拥有: ${s.gold} 金币。请下达指令。`);
+
+                const buttons = [
+                    {
+                        text: `升级陷阱 (-${costTrap}G)`,
+                        action: () => {
+                            if (s.gold >= costTrap) {
+                                s.gold -= costTrap;
+                                s.lair.trapLevel++;
+                                s.lair.trapPower += 50; // Flat increase
+                                game.utils.log(`陷阱已升级！当前等级 LV${s.lair.trapLevel}。整个巢穴充满了致命的机关。`, 'gain');
+                                game.constructionPhase();
+                            } else {
+                                game.utils.log("金币不足！公会可不提供赊账服务。", 'dispatcher');
+                            }
+                        }
+                    },
+                    {
+                        text: `招募狗头人仆从 (-${costMinion}G)`,
+                        action: () => {
+                            if (s.gold >= costMinion) {
+                                s.gold -= costMinion;
+                                s.lair.minions += 10;
+                                s.lair.minionPower += 40; // 10 minions = 40 power
+                                game.utils.log(`你招募了一群吵闹的狗头人。虽然很弱，但胜在数量。`, 'gain');
+                                game.constructionPhase();
+                            } else {
+                                game.utils.log("没钱？连狗头人都看不起你。", 'dispatcher');
+                            }
+                        }
+                    },
+                    {
+                        text: `吞噬财宝回血 (-${costHeal}G)`,
+                        action: () => {
+                            if (s.gold >= costHeal) {
+                                s.gold -= costHeal;
+                                s.boss.hp = Math.min(s.boss.hp + 500, s.boss.maxHp);
+                                game.utils.log(`你吞噬了一些财宝，生命值恢复了。`, 'magic');
+                                game.constructionPhase();
+                            } else {
+                                game.utils.log("你的财宝库空了，忍着吧。", 'dispatcher');
+                            }
+                        }
+                    },
+                    {
+                        text: "【 迎 战 】",
+                        full: true,
+                        action: () => game.waveStart()
+                    }
+                ];
+
+                const controls = document.getElementById('controls');
+                controls.innerHTML = '';
+                controls.className = 'grid grid-cols-2 gap-2'; // 2 cols for build phase
+
+                buttons.forEach(btn => {
+                    const b = document.createElement('button');
+                    b.className = 'btn-action';
+                    b.innerText = btn.text;
+                    b.onclick = btn.action;
+                    if (btn.full) b.className += ' col-span-2 font-bold text-red-100 bg-red-900 border-red-500';
+                    controls.appendChild(b);
+                });
+            },
+
+            waveStart: () => {
+                const wave = game.state.wave;
+                // Generate Hero Wave Stats
+                // Hero power scales exponentially
+                const heroPower = Math.floor(100 * Math.pow(1.2, wave));
+                const heroHp = Math.floor(200 * Math.pow(1.15, wave));
+                const loot = Math.floor(300 * Math.pow(1.1, wave));
+                
+                const heroTypes = ["新手冒险团", "资深雇佣兵", "皇家骑士团", "屠龙勇者小队", "传奇英雄同盟"];
+                const heroName = heroTypes[Math.min(Math.floor((wave-1)/2), heroTypes.length-1)];
+
+                game.state.heroes = {
+                    name: `${heroName} (LV ${wave})`,
+                    hp: heroHp,
+                    maxHp: heroHp,
+                    power: heroPower,
+                    loot: loot
+                };
+
+                game.utils.setImage("group of fantasy heroes knights mages entering dark cave glowing weapons battle formation cinematic shot from high angle");
+                game.utils.log(`【公会调度员】：第 ${wave} 波客人到了！<b>${game.state.heroes.name}</b>。战力评估：${heroPower}。`, 'dispatcher');
+                game.utils.log(`敌人正试图突破外层防御...`, 'danger');
+
+                // Auto-Defense Calculation
+                setTimeout(() => game.defenseCalculation(), 1500);
+            },
+
+            defenseCalculation: () => {
+                const s = game.state;
+                const h = s.heroes;
+                const totalDefense = s.lair.trapPower + s.lair.minionPower;
+                
+                game.utils.log(`你的巢穴防御力: ${totalDefense} (陷阱 ${s.lair.trapPower} + 仆从 ${s.lair.minionPower})`);
+
+                // Simple Defense Logic
+                // Damage dealt to heroes by defense
+                const defenseDmg = totalDefense * (0.8 + Math.random() * 0.4); 
+                h.hp -= Math.floor(defenseDmg);
+
+                // Minion casualties
+                if (s.lair.minions > 0) {
+                    const deadMinions = Math.floor(s.lair.minions * (h.power / (totalDefense + 100)));
+                    s.lair.minions = Math.max(0, s.lair.minions - deadMinions);
+                    s.lair.minionPower = s.lair.minions * 4; // Update power
+                    if (deadMinions > 0) game.utils.log(`防御战中牺牲了 ${deadMinions} 个仆从！`, 'danger');
+                }
+
+                if (h.hp <= 0) {
+                    // Full Defense Success
+                    game.utils.log(`<b>外层防御完全击溃了入侵者！</b>真是毫不费力。`, 'gain');
+                    game.waveWin();
+                } else {
+                    // Breach
+                    game.utils.log(`<b>防线被突破！</b>残存的英雄们冲入了你的王座大厅！(英雄剩余HP: ${h.hp})`, 'danger');
+                    setTimeout(() => game.bossFightStart(), 1500);
+                }
+                game.utils.updateUI();
+            },
+
+            bossFightStart: () => {
+                game.utils.setImage("giant dragon facing tiny heroes inside grand throne room fire breath preparing epic cinematic");
+                game.utils.log("你发出了震耳欲聋的咆哮，亲自下场战斗！", 'highlight');
+                
+                const controls = document.getElementById('controls');
+                controls.innerHTML = '';
+                controls.className = 'grid grid-cols-2 gap-2';
+
+                // Setup combat buttons
+                const attacks = [
+                    { text: "龙爪横扫", action: () => game.bossAttack('claw') },
+                    { text: "炼狱龙息 (AOE)", action: () => game.bossAttack('breath') }
+                ];
+                attacks.forEach(btn => {
+                    const b = document.createElement('button');
+                    b.className = 'btn-action text-lg py-4';
+                    b.innerText = btn.text;
+                    b.onclick = btn.action;
+                    controls.appendChild(b);
+                });
+            },
+
+            bossAttack: (type) => {
+                const s = game.state;
+                const h = s.heroes;
+                let dmg = 0;
+                let msg = "";
+
+                if (type === 'claw') {
+                    dmg = s.boss.power * (1 + Math.random() * 0.5);
+                    msg = `你挥舞巨爪，将英雄们拍飞，造成 ${Math.floor(dmg)} 点伤害。`;
+                } else {
+                    dmg = s.boss.power * 1.5;
+                    msg = `你深吸一口气，喷出毁灭性的烈焰！造成 ${Math.floor(dmg)} 点伤害。`;
+                }
+
+                h.hp -= Math.floor(dmg);
+                game.utils.log(msg, 'combat');
+                
+                if (h.hp <= 0) {
+                    game.waveWin();
+                } else {
+                    setTimeout(game.heroTurn, 1000);
+                }
+            },
+
+            heroTurn: () => {
+                const s = game.state;
+                const h = s.heroes;
+                
+                const dmg = h.power * (0.8 + Math.random() * 0.4);
+                s.boss.hp -= Math.floor(dmg);
+                
+                game.utils.log(`英雄们发起了反击！你的龙鳞崩裂，受到了 ${Math.floor(dmg)} 点伤害。`, 'danger');
+                game.utils.updateUI();
+
+                if (s.boss.hp <= 0) {
+                    game.gameOver();
+                } else {
+                    // Back to player turn (buttons remain active)
+                }
+            },
+
+            waveWin: () => {
+                const s = game.state;
+                const reward = s.heroes.loot;
+                s.gold += reward;
+                game.utils.log(`这一波英雄被消灭了。你从尸体上搜刮了 ${reward} 金币。`, 'gain');
+                
+                // Stat growth
+                s.boss.power += 10;
+                game.utils.log("经历了战斗，你的龙威增强了 (+10 Power)。", 'magic');
+
+                if (s.wave >= s.maxWaves) {
+                    game.victory();
+                } else {
+                    s.wave++;
+                    game.utils.updateUI();
+                    
+                    const controls = document.getElementById('controls');
+                    controls.innerHTML = '';
+                    const b = document.createElement('button');
+                    b.className = 'btn-action col-span-3 text-lg font-bold';
+                    b.innerText = "进入下一轮建设阶段";
+                    b.onclick = game.constructionPhase;
+                    controls.appendChild(b);
+                }
+            },
+
+            gameOver: () => {
+                game.utils.setImage("dead dragon massive corpse surrounded by cheering heroes tragic sad ending");
+                game.utils.log("【公会调度员】：哎呀...看来传说终结了。我会想念你的，顺便说一句，你的龙皮能卖个好价钱。", 'dispatcher');
+                game.utils.log("GAME OVER - 你被屠龙了。", 'danger');
+                document.getElementById('controls').innerHTML = '<button onclick="location.reload()" class="btn-action col-span-3">投胎转世 (重置)</button>';
+            },
+
+            victory: () => {
+                game.utils.setImage("dragon sleeping on massive mountain of gold treasure happy ending cinematic");
+                game.utils.log("【公会调度员】：难以置信...你居然活下来了？好吧，你是这里的霸主了。我得去别的领地找乐子了。", 'dispatcher');
+                game.utils.log("胜利！所有的英雄都已陨落，你的宝藏安全了。", 'gain');
+                document.getElementById('controls').innerHTML = '<button onclick="location.reload()" class="btn-action col-span-3">再次守护 (重置)</button>';
+            }
+        };
+    </script>
+</body>
+</html>
